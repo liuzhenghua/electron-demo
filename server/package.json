@@ -1,0 +1,16 @@
+{
+  "name": "electron-demo-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone model API server",
+  "main": "src/index.cjs",
+  "scripts": {
+    "start": "node src/index.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
