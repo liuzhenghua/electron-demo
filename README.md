@@ -51,9 +51,23 @@ npm run pack    # 生成未安装的应用目录
 npm run dist:development  # 使用 packaging/desktop/development.env
 npm run dist:test         # 使用 packaging/desktop/test.env
 npm run dist              # 使用 packaging/desktop/production.env
+npm run dist:mac          # Production：macOS x64 + arm64
+npm run dist:win          # Production：Windows x64 + arm64
+npm run dist:all          # Production：macOS/Windows 的 x64 + arm64
 ```
 
 桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置后端服务地址。Claude 和 Codex SDK 采用启动后动态安装。
+
+macOS 安装包应在 macOS 上构建并使用 Apple Developer ID 签名、公证；Windows 安装包建议在 Windows 或 Windows CI Runner 上构建并使用代码签名证书。`dist:all` 适合本地验证或已配置交叉构建依赖的环境，正式发布建议使用 macOS、Windows CI 矩阵分别执行 `dist:mac` 和 `dist:win`。
+
+发布对应平台前，还需准备 SDK 运行时镜像：
+
+```bash
+npm run prepare:runtimes -- --platform=darwin-x64
+npm run prepare:runtimes -- --platform=darwin-arm64
+npm run prepare:runtimes -- --platform=win32-x64
+npm run prepare:runtimes -- --platform=win32-arm64
+```
 
 构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 

@@ -14,7 +14,10 @@
     "dist": "npm run dist:production",
     "dist:development": "npm run build -- --mode development && electron-builder",
     "dist:test": "npm run build -- --mode test && electron-builder",
-    "dist:production": "npm run build -- --mode production && electron-builder"
+    "dist:production": "npm run build -- --mode production && electron-builder",
+    "dist:mac": "npm run build -- --mode production && electron-builder --mac --x64 --arm64",
+    "dist:win": "npm run build -- --mode production && electron-builder --win --x64 --arm64",
+    "dist:all": "npm run build -- --mode production && electron-builder --mac --win --x64 --arm64"
   },
   "keywords": [],
   "author": "",
