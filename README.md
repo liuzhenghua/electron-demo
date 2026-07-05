@@ -8,6 +8,18 @@
 - npm
 - 构建容器时需要 Docker Buildx/BuildKit 和 Docker Compose
 
+## 文档导航
+
+- 第一次接触 Electron：[Electron 基础与工程边界](docs/technical/electron-basics.md)
+- 配置和构建桌面安装包：[桌面打包说明](packaging/desktop/README.md)
+- 维护本项目的 Claude/Codex 运行时：[SDK 运行时动态安装](docs/runtime-installation.md)
+- 将大型 SDK 外置方案迁移到其他应用：[大型 SDK 外置与动态安装](docs/technical/sdk-externalization.md)
+- 部署远程 Web、动态更新 UI 和后端地址：[Electron 部署、远程 UI 与动态配置](docs/technical/electron-deployment.md)
+- 理解会话和 SDK session 的本地存储：[会话存储设计](docs/conversation-storage.md)
+- 部署和配置后端：[后端服务说明](server/README.md)
+
+通用架构方案统一收录在 [通用技术文档](docs/technical/README.md)，项目特有的命令、路径和环境变量保留在各自的项目文档中。
+
 ## 本地开发
 
 安装依赖并准备配置：
@@ -41,11 +53,7 @@ npm run dist:test         # 使用 packaging/desktop/test.env
 npm run dist              # 使用 packaging/desktop/production.env
 ```
 
-桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置后端服务地址。配置说明和覆盖优先级见 [桌面打包说明](packaging/desktop/README.md)。
-
-Claude 和 Codex SDK 采用启动后动态安装，下载源、镜像制作和安装目录验证见 [SDK 运行时动态安装](docs/runtime-installation.md)。
-
-可复用于其他桌面应用的架构说明见 [通用技术文档](docs/technical/README.md)。
+桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置后端服务地址。Claude 和 Codex SDK 采用启动后动态安装。
 
 构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 
