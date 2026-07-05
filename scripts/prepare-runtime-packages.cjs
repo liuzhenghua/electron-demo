@@ -7,11 +7,16 @@ const path = require('node:path')
 const { Readable } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
 const { pathToFileURL } = require('node:url')
+require('dotenv').config({ path: path.resolve('.env'), quiet: true })
 const { packageKey, packageSpecs, platformKey } = require('../electron/runtime-manager.cjs')
 
 const platform = process.argv.find((argument) => argument.startsWith('--platform='))?.split('=')[1] || platformKey()
 const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))?.slice('--output='.length)
 const output = path.resolve(outputArgument || 'runtime-packages')
+const versions = {
+  claude: process.env.CLAUDE_AGENT_SDK_VERSION,
+  codex: process.env.CODEX_SDK_VERSION
+}
 
 function archiveName(spec) {
   return `${spec.installAs.replace(/^@/, '').replaceAll('/', '-')}@${spec.version}.tgz`
@@ -25,7 +30,7 @@ async function sha512(filename) {
 
 async function main() {
   const specs = [...new Map(['claude', 'codex']
-    .flatMap((runtime) => packageSpecs(runtime, platform) || [])
+    .flatMap((runtime) => packageSpecs(runtime, platform, versions) || [])
     .map((spec) => [packageKey(spec), spec])).values()]
   if (!specs.length) throw new Error(`不支持的平台：${platform}`)
 

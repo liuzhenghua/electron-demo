@@ -8,7 +8,7 @@ npm run dist:test         # test.env
 npm run dist              # production.env
 ```
 
-构建时，环境名称、后端服务地址和 SDK 下载源会写入包内的 `dist/runtime-config.json`。
+构建时，环境名称、后端服务地址、SDK 下载源和 `CLAUDE_AGENT_SDK_VERSION`、`CODEX_SDK_VERSION` 会写入包内的 `dist/runtime-config.json`。后端只控制下载地址，不控制 SDK 版本。
 
 后端服务地址按以下优先级生效：
 

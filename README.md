@@ -43,6 +43,8 @@ npm run dist              # 使用 packaging/desktop/production.env
 
 桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置后端服务地址。配置说明和覆盖优先级见 [桌面打包说明](packaging/desktop/README.md)。
 
+Claude 和 Codex SDK 采用启动后动态安装，下载源、镜像制作和安装目录验证见 [SDK 运行时动态安装](docs/runtime-installation.md)。
+
 构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 
 ## 构建容器镜像

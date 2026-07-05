@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => {
     packagingEnv.RUNTIME_DOWNLOAD_BASE_URL ||
     ''
   ).trim()
+  const runtimeVersions = {
+    claude: process.env.CLAUDE_AGENT_SDK_VERSION || packagingEnv.CLAUDE_AGENT_SDK_VERSION || localEnv.CLAUDE_AGENT_SDK_VERSION || '0.3.201',
+    codex: process.env.CODEX_SDK_VERSION || packagingEnv.CODEX_SDK_VERSION || localEnv.CODEX_SDK_VERSION || '0.142.5'
+  }
 
   // Electron 主进程不会经过 Vite 编译，因此将构建环境写入随包分发的运行时配置。
   const electronRuntimeConfig = {
@@ -32,7 +36,7 @@ export default defineConfig(({ mode }) => {
       this.emitFile({
         type: 'asset',
         fileName: 'runtime-config.json',
-        source: `${JSON.stringify({ mode, serverUrl, runtimeDownloadBaseUrl }, null, 2)}\n`
+        source: `${JSON.stringify({ mode, serverUrl, runtimeDownloadBaseUrl, runtimeVersions }, null, 2)}\n`
       })
     }
   }

@@ -133,7 +133,11 @@ app.whenReady().then(async () => {
     root: path.join(app.getPath('userData'), 'runtimes'),
     fetch: (url) => net.fetch(url),
     isPackaged: app.isPackaged || process.env.RUNTIME_INSTALL_IN_DEVELOPMENT === 'true',
-    downloadBaseUrl: runtimeDownloadBaseUrl
+    downloadBaseUrl: runtimeDownloadBaseUrl,
+    versions: {
+      claude: process.env.CLAUDE_AGENT_SDK_VERSION || packagedConfig.runtimeVersions?.claude,
+      codex: process.env.CODEX_SDK_VERSION || packagedConfig.runtimeVersions?.codex
+    }
   })
   setRuntimeManager(runtimeManager)
   return Promise.all([chatStore.initialize(), runtimeManager.initialize()])

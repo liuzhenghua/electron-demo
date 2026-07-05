@@ -9,10 +9,20 @@ const { pipeline } = require('node:stream/promises')
 const { fileURLToPath, pathToFileURL } = require('node:url')
 const tar = require('tar')
 
-const RUNTIMES = {
+const DEFAULT_VERSIONS = {
+  claude: '0.3.201',
+  codex: '0.142.5'
+}
+
+function validVersion(value, fallback) {
+  return typeof value === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value.trim()) ? value.trim() : fallback
+}
+
+function createRuntimes(versions = {}) {
+  return {
   claude: {
     label: 'Claude',
-    version: '0.3.201',
+    version: validVersion(versions.claude, DEFAULT_VERSIONS.claude),
     entry: '@anthropic-ai/claude-agent-sdk',
     base: '@anthropic-ai/claude-agent-sdk',
     native: {
@@ -28,7 +38,7 @@ const RUNTIMES = {
   },
   codex: {
     label: 'Codex',
-    version: '0.142.5',
+    version: validVersion(versions.codex, DEFAULT_VERSIONS.codex),
     entry: '@openai/codex-sdk',
     base: '@openai/codex',
     sdk: '@openai/codex-sdk',
@@ -40,6 +50,7 @@ const RUNTIMES = {
       'linux-arm64': '@openai/codex-linux-arm64',
       'linux-x64': '@openai/codex-linux-x64'
     }
+  }
   }
 }
 
@@ -54,8 +65,8 @@ function packageDirectory(root, packageName) {
   return path.join(root, 'node_modules', ...packageName.split('/'))
 }
 
-function packageSpecs(id, key = platformKey()) {
-  const config = RUNTIMES[id]
+function packageSpecs(id, key = platformKey(), versions = {}) {
+  const config = createRuntimes(versions)[id]
   const nativePackage = config.native[key]
   if (!nativePackage) return null
   const packages = [config.sdk, config.base].filter(Boolean).map((name) => ({ name, version: config.version, installAs: name }))
@@ -72,16 +83,17 @@ function packageKey({ name, version, installAs }) {
 }
 
 class RuntimeManager {
-  constructor({ root, fetch, isPackaged, downloadBaseUrl }) {
+  constructor({ root, fetch, isPackaged, downloadBaseUrl, versions }) {
     this.root = root
     this.fetch = fetch
     this.isPackaged = isPackaged
     this.downloadBaseUrl = downloadBaseUrl?.trim().replace(/\/?$/, '/') || null
+    this.runtimes = createRuntimes(versions)
     this.manifestPromise = null
     this.listeners = new Set()
     this.installing = new Map()
     this.modules = new Map()
-    this.statuses = Object.fromEntries(Object.entries(RUNTIMES).map(([id, config]) => [id, {
+    this.statuses = Object.fromEntries(Object.entries(this.runtimes).map(([id, config]) => [id, {
       id,
       label: config.label,
       state: isPackaged ? 'checking' : 'ready',
@@ -105,7 +117,7 @@ class RuntimeManager {
   }
 
   runtimeRoot(id) {
-    const config = RUNTIMES[id]
+    const config = this.runtimes[id]
     return path.join(this.root, id, config.version, platformKey())
   }
 
@@ -115,7 +127,7 @@ class RuntimeManager {
 
   async initialize() {
     if (!this.isPackaged) return
-    await Promise.all(Object.keys(RUNTIMES).map(async (id) => {
+    await Promise.all(Object.keys(this.runtimes).map(async (id) => {
       const installed = await this.isInstalled(id)
       this.setStatus(id, { state: installed ? 'ready' : 'pending', progress: installed ? 100 : 0 })
     }))
@@ -124,7 +136,7 @@ class RuntimeManager {
   async isInstalled(id) {
     try {
       const marker = JSON.parse(await fsp.readFile(this.markerPath(id), 'utf8'))
-      return marker.version === RUNTIMES[id].version && marker.platform === platformKey()
+      return marker.version === this.runtimes[id].version && marker.platform === platformKey()
     } catch {
       return false
     }
@@ -133,7 +145,7 @@ class RuntimeManager {
   async installAll() {
     const results = []
     // 顺序安装，避免两个 200MB 级下载同时争抢用户带宽。
-    for (const id of Object.keys(RUNTIMES)) {
+    for (const id of Object.keys(this.runtimes)) {
       try {
         await this.ensureInstalled(id)
         results.push({ id, status: 'fulfilled' })
@@ -145,7 +157,7 @@ class RuntimeManager {
   }
 
   ensureInstalled(id) {
-    if (!RUNTIMES[id]) return Promise.reject(new Error(`不支持的运行时：${id}`))
+    if (!this.runtimes[id]) return Promise.reject(new Error(`不支持的运行时：${id}`))
     if (!this.isPackaged) return Promise.resolve()
     if (this.statuses[id].state === 'ready') return Promise.resolve()
     if (this.installing.has(id)) return this.installing.get(id)
@@ -156,8 +168,8 @@ class RuntimeManager {
   }
 
   async install(id) {
-    const config = RUNTIMES[id]
-    const packages = packageSpecs(id)
+    const config = this.runtimes[id]
+    const packages = packageSpecs(id, platformKey(), { claude: this.runtimes.claude.version, codex: this.runtimes.codex.version })
     if (!packages) {
       const message = `暂不支持当前系统（${platformKey()}）`
       this.setStatus(id, { state: 'error', message })
@@ -277,16 +289,16 @@ class RuntimeManager {
     if (this.modules.has(id)) return this.modules.get(id)
     await this.ensureInstalled(id)
     if (!this.isPackaged) {
-      const module = await import(RUNTIMES[id].entry)
+      const module = await import(this.runtimes[id].entry)
       this.modules.set(id, module)
       return module
     }
     const root = this.runtimeRoot(id)
-    const packageRoot = packageDirectory(root, RUNTIMES[id].entry)
+    const packageRoot = packageDirectory(root, this.runtimes[id].entry)
     const packageJson = JSON.parse(await fsp.readFile(path.join(packageRoot, 'package.json'), 'utf8'))
     const exported = packageJson.exports?.['.']
     const relativeEntry = exported?.import || exported?.default || packageJson.module || packageJson.main
-    if (!relativeEntry) throw new Error(`${RUNTIMES[id].label} SDK 缺少入口文件`)
+    if (!relativeEntry) throw new Error(`${this.runtimes[id].label} SDK 缺少入口文件`)
     const entry = path.join(packageRoot, relativeEntry)
     const module = await import(pathToFileURL(entry).href)
     this.modules.set(id, module)
@@ -294,4 +306,4 @@ class RuntimeManager {
   }
 }
 
-module.exports = { RuntimeManager, packageKey, packageSpecs, platformKey }
+module.exports = { DEFAULT_VERSIONS, RuntimeManager, packageKey, packageSpecs, platformKey }
