@@ -1,4 +1,5 @@
 const path = require('node:path')
+const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const dotenv = require('dotenv')
@@ -13,7 +14,16 @@ dotenv.config({ path: envPath, quiet: true })
 
 const uiUrl = process.env.ELECTRON_UI_URL?.trim() || null
 const localIndex = path.join(app.getAppPath(), 'dist', 'index.html')
-const serverUrl = (process.env.SERVER_URL || process.env.VITE_SERVER_URL || 'http://127.0.0.1:4123').replace(/\/$/, '')
+const packagedConfigPath = path.join(app.getAppPath(), 'dist', 'runtime-config.json')
+const packagedConfig = app.isPackaged && fs.existsSync(packagedConfigPath)
+  ? JSON.parse(fs.readFileSync(packagedConfigPath, 'utf8'))
+  : {}
+const serverUrl = (
+  process.env.SERVER_URL ||
+  process.env.VITE_SERVER_URL ||
+  packagedConfig.serverUrl ||
+  'http://127.0.0.1:4123'
+).replace(/\/$/, '')
 const chatRequests = new Map()
 const permissionRequests = new Map()
 let chatStore

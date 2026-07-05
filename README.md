@@ -36,10 +36,14 @@ npm run dev
 ```bash
 npm run build   # 只构建前端静态资源
 npm run pack    # 生成未安装的应用目录
-npm run dist    # 生成安装包
+npm run dist:development  # 使用 packaging/desktop/development.env
+npm run dist:test         # 使用 packaging/desktop/test.env
+npm run dist              # 使用 packaging/desktop/production.env
 ```
 
-构建产物分别位于 `dist/` 和 `release/`。
+桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置模型服务地址。配置说明和覆盖优先级见 [桌面打包说明](packaging/desktop/README.md)。
+
+构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 
 ## 构建容器镜像
 
