@@ -1,0 +1,19 @@
+name: electron-demo-images
+
+services:
+  frontend:
+    image: "${FRONTEND_IMAGE:-electron-demo-frontend}:${IMAGE_TAG:-latest}"
+    build:
+      context: ..
+      dockerfile: scripts/docker/frontend.Dockerfile
+      args:
+        NPM_REGISTRY: "${NPM_REGISTRY:-}"
+        VITE_SERVER_URL: "${VITE_SERVER_URL:-}"
+
+  server:
+    image: "${SERVER_IMAGE:-electron-demo-server}:${IMAGE_TAG:-latest}"
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: "${NPM_REGISTRY:-}"

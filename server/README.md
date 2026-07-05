@@ -8,7 +8,7 @@
 cp server/.env.example server/.env
 ```
 
-演示模型维护在 `data/models.json`，OpenAI 和 Anthropic 必须各配置至少一个模型。每个模型独立配置连接地址与访问密钥：
+演示模型维护在 `data/models.json`，OpenAI 和 Anthropic 必须各配置至少一个模型。敏感值使用 `${环境变量名}` 占位，接口返回前会替换成 `.env` 中的实际值：
 
 ```json
 {
@@ -16,11 +16,17 @@ cp server/.env.example server/.env
   "name": "GPT-5.1 Codex",
   "model_provider": "openai",
   "endpoint": "https://api.openai.com/v1",
-  "api_key": "demo-openai-key",
+  "api_key": "${OPENAI_API_KEY}",
   "context_window": 200000,
   "multimodal": true
 }
 ```
+
+```dotenv
+OPENAI_API_KEY=replace-with-openai-key
+```
+
+不同模型可以引用不同变量。任何占位变量缺失时，服务会拒绝启动。
 
 ```bash
 cd server

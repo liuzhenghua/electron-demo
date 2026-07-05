@@ -17,6 +17,7 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # Test coverage
 coverage/
@@ -29,3 +30,6 @@ coverage/
 # OS files
 .DS_Store
 Thumbs.db
+
+# sensitive files
+.secrets/

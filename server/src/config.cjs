@@ -2,9 +2,25 @@
 
 const path = require('node:path')
 const dotenv = require('dotenv')
-const models = require('../data/models.json')
+const modelDefinitions = require('../data/models.json')
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true })
+
+function resolveEnvironment(value) {
+  if (Array.isArray(value)) return value.map(resolveEnvironment)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveEnvironment(item)]))
+  }
+  if (typeof value !== 'string') return value
+
+  return value.replace(/\$\{([A-Z0-9_]+)\}/g, (_, name) => {
+    const resolved = process.env[name]
+    if (resolved === undefined || resolved === '') throw new Error(`Environment variable ${name} is required by models.json`)
+    return resolved
+  })
+}
+
+const models = resolveEnvironment(modelDefinitions)
 
 if (!models.some((model) => model.model_provider === 'openai') || !models.some((model) => model.model_provider === 'anthropic')) {
   throw new Error('models.json must configure at least one OpenAI model and one Anthropic model')
