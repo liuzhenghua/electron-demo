@@ -8,8 +8,14 @@ function appendDelta(previous, current) {
   return current.startsWith(previous) ? current.slice(previous.length) : current
 }
 
+let runtimeManager
+
+function setRuntimeManager(manager) {
+  runtimeManager = manager
+}
+
 async function runCodex({ conversationId, model, prompt, cwd, signal, onEvent, accessMode, resumeId }) {
-  const { Codex } = await import('@openai/codex-sdk')
+  const { Codex } = await runtimeManager.load('codex')
   const key = `${conversationId}:${model.id}:${accessMode}`
   let thread = codexThreads.get(key)
   if (!thread) {
@@ -46,7 +52,7 @@ async function runCodex({ conversationId, model, prompt, cwd, signal, onEvent, a
 }
 
 async function runClaude({ conversationId, model, prompt, cwd, controller, onEvent, requestPermission, accessMode, resumeId }) {
-  const { query } = await import('@anthropic-ai/claude-agent-sdk')
+  const { query } = await runtimeManager.load('claude')
   const key = `${conversationId}:${model.id}:${accessMode}`
   const seenTools = new Set()
   let streamedText = ''
@@ -125,4 +131,4 @@ function clearAllConversations() {
   claudeSessions.clear()
 }
 
-module.exports = { runAgent, clearConversation, clearAllConversations }
+module.exports = { runAgent, clearConversation, clearAllConversations, setRuntimeManager }

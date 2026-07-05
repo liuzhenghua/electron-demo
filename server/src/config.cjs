@@ -36,5 +36,6 @@ module.exports = {
   host: process.env.HOST || '0.0.0.0',
   port: Number.parseInt(process.env.PORT || '4123', 10),
   corsOrigin: process.env.CORS_ORIGIN || '*',
+  runtimeDownloadBaseUrl: process.env.RUNTIME_DOWNLOAD_BASE_URL?.trim() || '',
   models
 }

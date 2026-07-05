@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
     packagingEnv.VITE_SERVER_URL ||
     'http://127.0.0.1:4123'
   ).replace(/\/$/, '')
+  const runtimeDownloadBaseUrl = (
+    process.env.RUNTIME_DOWNLOAD_BASE_URL ||
+    packagingEnv.RUNTIME_DOWNLOAD_BASE_URL ||
+    ''
+  ).trim()
 
   // Electron 主进程不会经过 Vite 编译，因此将构建环境写入随包分发的运行时配置。
   const electronRuntimeConfig = {
@@ -27,7 +32,7 @@ export default defineConfig(({ mode }) => {
       this.emitFile({
         type: 'asset',
         fileName: 'runtime-config.json',
-        source: `${JSON.stringify({ mode, serverUrl }, null, 2)}\n`
+        source: `${JSON.stringify({ mode, serverUrl, runtimeDownloadBaseUrl }, null, 2)}\n`
       })
     }
   }

@@ -1,10 +1,11 @@
 const path = require('node:path')
 const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, net, shell } = require('electron')
 const dotenv = require('dotenv')
-const { runAgent, clearConversation, clearAllConversations } = require('./agent-client.cjs')
+const { runAgent, clearConversation, clearAllConversations, setRuntimeManager } = require('./agent-client.cjs')
 const { ChatStore } = require('./chat-store.cjs')
+const { RuntimeManager } = require('./runtime-manager.cjs')
 
 const envPath = app.isPackaged
   ? path.join(app.getPath('userData'), '.env')
@@ -27,6 +28,45 @@ const serverUrl = (
 const chatRequests = new Map()
 const permissionRequests = new Map()
 let chatStore
+let runtimeManager
+
+function validDownloadUrl(value, allowedProtocols = ['http:', 'https:', 'file:']) {
+  if (!value || typeof value !== 'string') return null
+  try {
+    const url = new URL(value.trim())
+    return allowedProtocols.includes(url.protocol) ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+async function resolveRuntimeDownloadBaseUrl() {
+  const localOverride = validDownloadUrl(process.env.RUNTIME_DOWNLOAD_BASE_URL)
+  if (localOverride) return localOverride
+
+  const cachePath = path.join(app.getPath('userData'), 'runtime-source.json')
+  try {
+    const response = await net.fetch(`${serverUrl}/api/app-config`, { signal: AbortSignal.timeout(5000) })
+    if (response.ok) {
+      const result = await response.json()
+      const remote = validDownloadUrl(result.data?.runtimeDownloadBaseUrl)
+      if (remote) {
+        await fs.promises.writeFile(cachePath, `${JSON.stringify({ runtimeDownloadBaseUrl: remote, updatedAt: new Date().toISOString() }, null, 2)}\n`)
+        return remote
+      }
+    }
+  } catch (error) {
+    console.warn(`无法获取后端应用配置：${error.message}`)
+  }
+
+  try {
+    const cached = JSON.parse(await fs.promises.readFile(cachePath, 'utf8'))
+    const cachedUrl = validDownloadUrl(cached.runtimeDownloadBaseUrl)
+    if (cachedUrl) return cachedUrl
+  } catch {}
+
+  return validDownloadUrl(packagedConfig.runtimeDownloadBaseUrl)
+}
 
 async function loadModels() {
   const response = await fetch(`${serverUrl}/api/models`)
@@ -86,9 +126,17 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   chatStore = new ChatStore(app.getPath('userData'))
-  return chatStore.initialize()
+  const runtimeDownloadBaseUrl = await resolveRuntimeDownloadBaseUrl()
+  runtimeManager = new RuntimeManager({
+    root: path.join(app.getPath('userData'), 'runtimes'),
+    fetch: (url) => net.fetch(url),
+    isPackaged: app.isPackaged || process.env.RUNTIME_INSTALL_IN_DEVELOPMENT === 'true',
+    downloadBaseUrl: runtimeDownloadBaseUrl
+  })
+  setRuntimeManager(runtimeManager)
+  return Promise.all([chatStore.initialize(), runtimeManager.initialize()])
 }).then(() => {
   ipcMain.handle('app:getInfo', () => ({
     name: app.getName(),
@@ -114,6 +162,8 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('settings:get', () => chatStore.getSettings())
   ipcMain.handle('settings:update', (_event, patch) => chatStore.updateSettings(patch))
+  ipcMain.handle('runtimes:status', () => runtimeManager.getStatuses())
+  ipcMain.handle('runtimes:retry', (_event, runtime) => runtimeManager.ensureInstalled(runtime))
   ipcMain.on('chat:start', async (event, { requestId, conversationId, runtime, modelId, prompt, accessMode }) => {
     const controller = new AbortController()
     chatRequests.set(requestId, controller)
@@ -156,7 +206,14 @@ app.whenReady().then(() => {
       : { behavior: 'deny', message: '用户拒绝了该工具调用', toolUseID: request.toolUseID })
   })
 
+  runtimeManager.subscribe((status) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send('runtimes:status', status)
+    }
+  })
+
   createWindow()
+  runtimeManager.installAll().catch(console.error)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

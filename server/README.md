@@ -44,6 +44,7 @@ docker run --rm -p 4123:4123 model-api
 接口：
 
 - `GET /health`：健康检查
+- `GET /api/app-config`：桌面端动态配置，包括 SDK 静态下载地址
 - `GET /api/models`：桌面端使用的统一模型列表；`model_provider` 表示请求协议
 - `POST /api/chat`：可选的统一会话代理；服务端根据模型的 `model_provider` 调用对应上游
 - `GET /openai/v1/models`：OpenAI 格式
@@ -69,3 +70,5 @@ docker run --rm -p 4123:4123 model-api
 ```
 
 当前为演示配置，`GET /api/models` 会下发每个模型的密钥，供桌面运行时直接调用。生产环境必须为接口增加用户鉴权、HTTPS，并优先下发权限受限的临时凭证。允许通过 `CORS_ORIGIN` 限制跨域来源。桌面端构建时使用 `VITE_SERVER_URL` 指定服务地址。
+
+`RUNTIME_DOWNLOAD_BASE_URL` 指向包含 `manifest.json` 和 `.tgz` 文件的静态文件目录。后端通过 `/api/app-config` 下发地址，SDK 文件由桌面端直接从文件服务器下载。

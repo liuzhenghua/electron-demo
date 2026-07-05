@@ -1,7 +1,7 @@
 'use strict'
 
 const http = require('node:http')
-const { corsOrigin } = require('./config.cjs')
+const { corsOrigin, runtimeDownloadBaseUrl } = require('./config.cjs')
 const { getAnthropicModels, getModels, getOpenAIModels } = require('./models.cjs')
 
 function sendJson(response, status, body) {
@@ -25,6 +25,10 @@ async function handleRequest(request, response) {
 
   if (request.method === 'GET' && url.pathname === '/api/models') {
     return sendJson(response, 200, getModels())
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/app-config') {
+    return sendJson(response, 200, { data: { runtimeDownloadBaseUrl } })
   }
 
   const modelPaths = ['/v1/models', '/openai/v1/models', '/anthropic/v1/models']

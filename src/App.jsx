@@ -31,6 +31,7 @@ export default function App() {
   const [accessMode, setAccessMode] = useState('approval')
   const [models, setModels] = useState([])
   const [modelsError, setModelsError] = useState(false)
+  const [runtimeStatuses, setRuntimeStatuses] = useState({})
   const menuRef = useRef(null)
 
   useEffect(() => {
@@ -40,6 +41,16 @@ export default function App() {
     }
     document.addEventListener('pointerdown', close)
     return () => document.removeEventListener('pointerdown', close)
+  }, [])
+
+  useEffect(() => {
+    if (!window.electronAPI?.getRuntimeStatus) return undefined
+    window.electronAPI.getRuntimeStatus().then((statuses) => {
+      setRuntimeStatuses(Object.fromEntries(statuses.map((status) => [status.id, status])))
+    }).catch(console.error)
+    return window.electronAPI.onRuntimeStatus((status) => {
+      setRuntimeStatuses((current) => ({ ...current, [status.id]: status }))
+    })
   }, [])
 
   useEffect(() => {
@@ -150,13 +161,14 @@ export default function App() {
         </div>
       </aside>
       <section className="content">
-        {activeConversation && <Chat key={activeChat} conversation={activeConversation} runtime={runtime} models={models} modelsError={modelsError} selectedModel={selectedModels[runtime]} accessMode={accessMode} onModelChange={(modelId) => changeModel(runtime, modelId)} onAccessModeChange={changeAccessMode} onSaved={updateChatMetadata} />}
+        {activeConversation && <Chat key={activeChat} conversation={activeConversation} runtime={runtime} runtimeStatus={runtimeStatuses[runtime]} models={models} modelsError={modelsError} selectedModel={selectedModels[runtime]} accessMode={accessMode} onModelChange={(modelId) => changeModel(runtime, modelId)} onAccessModeChange={changeAccessMode} onSaved={updateChatMetadata} />}
+        <RuntimeStatusBar statuses={runtimeStatuses} />
       </section>
     </main>
   )
 }
 
-function Chat({ conversation, runtime, models, modelsError, selectedModel, accessMode, onModelChange, onAccessModeChange, onSaved }) {
+function Chat({ conversation, runtime, runtimeStatus, models, modelsError, selectedModel, accessMode, onModelChange, onAccessModeChange, onSaved }) {
   const conversationId = conversation.id
   const runtimeProvider = runtime === 'claude' ? 'anthropic' : 'openai'
   const availableModels = models.filter((model) => model.model_provider === runtimeProvider)
@@ -207,7 +219,7 @@ function Chat({ conversation, runtime, models, modelsError, selectedModel, acces
 
   const sendMessage = async () => {
     const content = input.trim()
-    if (!content || !modelId || sending) return
+    if (!content || !modelId || sending || runtimeStatus?.state !== 'ready') return
     followOutputRef.current = true
     if (!messages.length) titleRef.current = content.replace(/\s+/g, ' ').slice(0, 28) || '新对话'
     const nextMessages = [...messages, { role: 'user', content }]
@@ -271,7 +283,7 @@ function Chat({ conversation, runtime, models, modelsError, selectedModel, acces
       <div className="composer-stack">
         {pendingPermissions.map((permission) => <PermissionPrompt permission={permission} onResponse={respondPermission} key={permission.permissionId} />)}
         <div className="prompt-box">
-          <textarea ref={inputRef} rows="1" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage() } }} placeholder="输入消息…" disabled={sending} />
+          <textarea ref={inputRef} rows="1" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage() } }} placeholder={runtimeStatus?.state === 'ready' ? '输入消息…' : runtimeStatus?.state === 'error' ? '运行环境安装失败，请点击底部重试' : '运行环境安装中，请稍候…'} disabled={sending || runtimeStatus?.state !== 'ready'} />
           <div className="prompt-toolbar">
             <div className="prompt-options">
               <select aria-label="选择模型" disabled={!availableModels.length || sending} value={modelId} onChange={(event) => { setModelId(event.target.value); onModelChange(event.target.value) }}>
@@ -283,11 +295,29 @@ function Chat({ conversation, runtime, models, modelsError, selectedModel, acces
                 <option value="full">完全访问权限</option>
               </select>
             </div>
-            <button aria-label="发送" onClick={sendMessage} disabled={!modelId || !input.trim() || sending}>{sending ? '…' : '↑'}</button>
+            <button aria-label="发送" onClick={sendMessage} disabled={!modelId || !input.trim() || sending || runtimeStatus?.state !== 'ready'}>{sending ? '…' : '↑'}</button>
           </div>
         </div>
       </div>
     </div>
+  </div>
+}
+
+function RuntimeStatusBar({ statuses }) {
+  const items = Object.values(statuses)
+  const active = items.filter((item) => item.state !== 'ready')
+  if (!items.length || !active.length) return null
+  const installing = active.find((item) => item.state === 'installing' || item.state === 'checking' || item.state === 'pending')
+  const failed = active.find((item) => item.state === 'error')
+  const status = installing || failed
+  const label = status.state === 'error'
+    ? `${status.label} 安装失败`
+    : `${status.message || `正在安装 ${status.label}`} · ${status.progress || 0}%`
+
+  return <div className={`runtime-status-bar ${status.state}`} role="status" aria-live="polite">
+    <span className="runtime-status-dot" />
+    <span>{label}</span>
+    {status.state === 'error' && <button type="button" onClick={() => window.electronAPI.retryRuntimeInstall(status.id).catch(console.error)}>重试</button>}
   </div>
 }
 

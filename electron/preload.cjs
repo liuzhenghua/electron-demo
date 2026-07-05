@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openConversationsDirectory: () => ipcRenderer.invoke('conversations:openDirectory'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
+  getRuntimeStatus: () => ipcRenderer.invoke('runtimes:status'),
+  retryRuntimeInstall: (runtime) => ipcRenderer.invoke('runtimes:retry', runtime),
+  onRuntimeStatus: (listener) => {
+    const handler = (_event, status) => listener(status)
+    ipcRenderer.on('runtimes:status', handler)
+    return () => ipcRenderer.removeListener('runtimes:status', handler)
+  },
   respondPermission: (permissionId, allowed) => ipcRenderer.send('chat:permission', { permissionId, allowed }),
   streamChat: (payload, onEvent) => {
     const requestId = crypto.randomUUID()

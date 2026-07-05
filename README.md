@@ -19,7 +19,7 @@ cp .env.example .env
 cp server/.env.example server/.env
 ```
 
-分别启动模型服务和桌面客户端：
+分别启动后端服务和桌面客户端：
 
 ```bash
 # 终端一
@@ -41,7 +41,7 @@ npm run dist:test         # 使用 packaging/desktop/test.env
 npm run dist              # 使用 packaging/desktop/production.env
 ```
 
-桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置模型服务地址。配置说明和覆盖优先级见 [桌面打包说明](packaging/desktop/README.md)。
+桌面打包配置统一位于 `packaging/desktop/`，使用对应环境的 `*.env` 文件配置后端服务地址。配置说明和覆盖优先级见 [桌面打包说明](packaging/desktop/README.md)。
 
 构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 
