@@ -45,6 +45,8 @@ npm run dist              # 使用 packaging/desktop/production.env
 
 Claude 和 Codex SDK 采用启动后动态安装，下载源、镜像制作和安装目录验证见 [SDK 运行时动态安装](docs/runtime-installation.md)。
 
+可复用于其他桌面应用的架构说明见 [通用技术文档](docs/technical/README.md)。
+
 构建产物分别位于 `dist/` 和 `release/`。不同环境构建会覆盖前一次产物，需要保留时请在下一次构建前复制或重命名。
 
 ## 构建容器镜像
