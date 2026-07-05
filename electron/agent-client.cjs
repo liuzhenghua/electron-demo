@@ -8,13 +8,14 @@ function appendDelta(previous, current) {
   return current.startsWith(previous) ? current.slice(previous.length) : current
 }
 
-async function runCodex({ conversationId, model, prompt, cwd, signal, onEvent }) {
+async function runCodex({ conversationId, model, prompt, cwd, signal, onEvent, accessMode, resumeId }) {
   const { Codex } = await import('@openai/codex-sdk')
-  const key = `${conversationId}:${model.id}`
+  const key = `${conversationId}:${model.id}:${accessMode}`
   let thread = codexThreads.get(key)
   if (!thread) {
     const codex = new Codex({ apiKey: model.api_key, baseUrl: model.endpoint, config: { show_raw_agent_reasoning: true } })
-    thread = codex.startThread({ model: model.id, workingDirectory: cwd, skipGitRepoCheck: true, sandboxMode: 'workspace-write', approvalPolicy: 'never' })
+    const threadOptions = { model: model.id, workingDirectory: cwd, skipGitRepoCheck: true, sandboxMode: accessMode === 'full' ? 'danger-full-access' : 'workspace-write', approvalPolicy: accessMode === 'full' ? 'never' : 'on-request' }
+    thread = resumeId ? codex.resumeThread(resumeId, threadOptions) : codex.startThread(threadOptions)
     codexThreads.set(key, thread)
   }
 
@@ -44,9 +45,9 @@ async function runCodex({ conversationId, model, prompt, cwd, signal, onEvent })
   }
 }
 
-async function runClaude({ conversationId, model, prompt, cwd, controller, onEvent, requestPermission }) {
+async function runClaude({ conversationId, model, prompt, cwd, controller, onEvent, requestPermission, accessMode, resumeId }) {
   const { query } = await import('@anthropic-ai/claude-agent-sdk')
-  const key = `${conversationId}:${model.id}`
+  const key = `${conversationId}:${model.id}:${accessMode}`
   const seenTools = new Set()
   let streamedText = ''
   let streamedThinking = ''
@@ -55,10 +56,11 @@ async function runClaude({ conversationId, model, prompt, cwd, controller, onEve
     cwd,
     model: model.id,
     includePartialMessages: true,
-    permissionMode: 'acceptEdits',
-    canUseTool: (toolName, input, permissionOptions) => requestPermission({ toolName, input, ...permissionOptions }),
+    permissionMode: accessMode === 'full' ? 'bypassPermissions' : 'default',
+    ...(accessMode === 'full' ? { allowDangerouslySkipPermissions: true } : { canUseTool: (toolName, input, permissionOptions) => requestPermission({ toolName, input, ...permissionOptions }) }),
+    settings: { skipWebFetchPreflight: true },
     settingSources: ['user', 'project', 'local'],
-    ...(claudeSessions.has(key) ? { resume: claudeSessions.get(key) } : {}),
+    ...(claudeSessions.has(key) || resumeId ? { resume: claudeSessions.get(key) || resumeId } : {}),
     env: { ...process.env, ANTHROPIC_API_KEY: model.api_key, ANTHROPIC_BASE_URL: model.endpoint, CLAUDE_AGENT_SDK_CLIENT_APP: 'electron-demo/1.0.0' }
   }
 
@@ -112,4 +114,15 @@ async function runAgent(options) {
   return runClaude(options)
 }
 
-module.exports = { runAgent }
+function clearConversation(conversationId) {
+  const prefix = `${conversationId}:`
+  for (const key of codexThreads.keys()) if (key.startsWith(prefix)) codexThreads.delete(key)
+  for (const key of claudeSessions.keys()) if (key.startsWith(prefix)) claudeSessions.delete(key)
+}
+
+function clearAllConversations() {
+  codexThreads.clear()
+  claudeSessions.clear()
+}
+
+module.exports = { runAgent, clearConversation, clearAllConversations }

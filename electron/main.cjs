@@ -2,7 +2,8 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const dotenv = require('dotenv')
-const { runAgent } = require('./agent-client.cjs')
+const { runAgent, clearConversation, clearAllConversations } = require('./agent-client.cjs')
+const { ChatStore } = require('./chat-store.cjs')
 
 const envPath = app.isPackaged
   ? path.join(app.getPath('userData'), '.env')
@@ -15,6 +16,7 @@ const localIndex = path.join(app.getAppPath(), 'dist', 'index.html')
 const serverUrl = (process.env.SERVER_URL || process.env.VITE_SERVER_URL || 'http://127.0.0.1:4123').replace(/\/$/, '')
 const chatRequests = new Map()
 const permissionRequests = new Map()
+let chatStore
 
 async function loadModels() {
   const response = await fetch(`${serverUrl}/api/models`)
@@ -75,6 +77,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  chatStore = new ChatStore(app.getPath('userData'))
+  return chatStore.initialize()
+}).then(() => {
   ipcMain.handle('app:getInfo', () => ({
     name: app.getName(),
     version: app.getVersion(),
@@ -82,11 +87,31 @@ app.whenReady().then(() => {
     platform: process.platform
   }))
   ipcMain.handle('models:list', async () => (await loadModels()).map(({ api_key, endpoint, ...model }) => model))
-  ipcMain.on('chat:start', async (event, { requestId, conversationId, runtime, modelId, prompt }) => {
+  ipcMain.handle('conversations:list', () => chatStore.listConversations())
+  ipcMain.handle('conversations:get', (_event, id) => chatStore.getConversation(id))
+  ipcMain.handle('conversations:save', (_event, conversation) => chatStore.saveConversation(conversation))
+  ipcMain.handle('conversations:delete', async (_event, id) => {
+    clearConversation(id)
+    await chatStore.deleteConversation(id)
+  })
+  ipcMain.handle('conversations:deleteAll', async () => {
+    clearAllConversations()
+    await chatStore.deleteAllConversations()
+  })
+  ipcMain.handle('conversations:openDirectory', async () => {
+    const error = await shell.openPath(chatStore.root)
+    if (error) throw new Error(`无法打开会话目录：${error}`)
+  })
+  ipcMain.handle('settings:get', () => chatStore.getSettings())
+  ipcMain.handle('settings:update', (_event, patch) => chatStore.updateSettings(patch))
+  ipcMain.on('chat:start', async (event, { requestId, conversationId, runtime, modelId, prompt, accessMode }) => {
     const controller = new AbortController()
     chatRequests.set(requestId, controller)
+    const sessionKey = `${runtime}:${modelId}:${accessMode === 'full' ? 'full' : 'approval'}`
     const send = (payload) => {
       if (!event.sender.isDestroyed()) event.sender.send(`chat:event:${requestId}`, payload)
+      const sessionId = payload.sessionId || payload.threadId
+      if (payload.type === 'done' && sessionId) chatStore.saveSdkSession(conversationId, sessionKey, sessionId).catch(console.error)
     }
     const requestPermission = ({ toolName, input, suggestions, signal, ...details }) => new Promise((resolve) => {
       const permissionId = crypto.randomUUID()
@@ -103,7 +128,8 @@ app.whenReady().then(() => {
       const provider = runtime === 'codex' ? 'openai' : 'anthropic'
       const model = models.find((item) => item.id === modelId && item.model_provider === provider)
       if (!model) throw new Error('未找到所选模型配置')
-      await runAgent({ conversationId, runtime, model, prompt, cwd: process.cwd(), signal: controller.signal, controller, onEvent: send, requestPermission })
+      const conversation = await chatStore.getConversation(conversationId)
+      await runAgent({ conversationId, runtime, model, prompt, accessMode: accessMode === 'full' ? 'full' : 'approval', resumeId: conversation?.sdkSessions?.[sessionKey], cwd: process.cwd(), signal: controller.signal, controller, onEvent: send, requestPermission })
     } catch (error) {
       if (error.name !== 'AbortError') send({ type: 'error', message: error.message || '模型请求失败' })
     } finally {
@@ -116,8 +142,8 @@ app.whenReady().then(() => {
     if (!request) return
     request.send({ type: 'activity', id: request.toolUseID || permissionId, label: `调用工具：${request.toolName}`, status: allowed ? 'in_progress' : 'failed', input: request.input, ...(allowed ? {} : { result: '用户拒绝了该工具调用' }) })
     request.finish(allowed
-      ? { behavior: 'allow', updatedInput: request.input }
-      : { behavior: 'deny', message: '用户拒绝了该工具调用' })
+      ? { behavior: 'allow', updatedInput: request.input, updatedPermissions: request.suggestions, toolUseID: request.toolUseID }
+      : { behavior: 'deny', message: '用户拒绝了该工具调用', toolUseID: request.toolUseID })
   })
 
   createWindow()
